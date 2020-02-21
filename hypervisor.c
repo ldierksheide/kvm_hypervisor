@@ -6,13 +6,16 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <signal.h>
+#include <sys/time.h>
 
 #include "debug.h"
 #include "definition.h"
 #include "hypercall.h"
 #include "elf_loader.h"
 
-#define PS_LIMIT (0x1000000)
+//#define PS_LIMIT (0x1000000)
+#define PS_LIMIT (0x10000000)
 //#define PS_LIMIT (0x80000000)
 #define KERNEL_STACK_SIZE (0x4000)
 #define MAX_KERNEL_SIZE (PS_LIMIT - 0x5000 - KERNEL_STACK_SIZE)
@@ -56,6 +59,33 @@ void read_file(const char *filename, uint8_t** content_ptr, size_t* size_ptr) {
   *size_ptr = size;
 }
 
+void setup_protected_mode(VM *vm)
+{
+    struct kvm_sregs sregs;
+    if(ioctl(vm->vcpufd, KVM_GET_SREGS, &sregs) < 0) pexit("ioctl(KVM_GET_SREGS)");
+    struct kvm_segment seg = {
+        .base = 0,
+        .limit = 0xffffffff,
+        .selector = 1 << 3,
+        .present = 1,
+        .type = 11, /* Code: execute, read, accessed                */
+        .dpl = 0,
+        .db = 1,
+        .s = 1, /* Code/data */
+        .l = 0,
+        .g = 1, /* 4KB granularity */
+    };
+
+    sregs.cr0 |= CR0_PE; /* enter protected mallocode */
+
+    sregs.cs = seg;
+
+    seg.type = 3; /* Data: read/write, accessed */
+    seg.selector = 2 << 3;
+    sregs.ds = sregs.es = sregs.fs = sregs.gs = sregs.ss = seg;
+    if(ioctl(vm->vcpufd, KVM_SET_SREGS, &sregs) < 0) pexit("ioctl(KVM_SET_SREGSs)");
+}
+
 /* set rip = entry point
  * set rsp = MAX_KERNEL_SIZE + KERNEL_STACK_SIZE (the max address can be used)
  *
@@ -89,10 +119,30 @@ void setup_sregs(VM *vm) {
 // Phys = 0x00100000 = 1048576
 // Entry point = 0x0010000c = 1048588
 // Phys of sec 2 = 0x00102000 = 1056768
+/*
+//sigaction stuff?
+void signal_handler (int sig, siginfo_t *info, void *ucontext) {
+	printf("ahh!\n");
+}
 
-
+*/
 VM* kvm_init(uint8_t code[], size_t len) { 
+/*
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	struct itimerval timer;
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = &signal_handler;
+	sigaction(SIGALRM, &sa, NULL);
 
+	timer.it_value.tv_sec = 1;
+	timer.it_value.tv_usec = 0;
+	timer.it_interval.tv_sec = 1;
+	timer.it_interval.tv_usec = 0;
+	setitimer(ITIMER_REAL, &timer, NULL);
+
+	while(1);
+*/
   struct elf_contig_mem s[3] = {};
   struct elf_hdr *hdr = (struct elf_hdr *)code;
 
@@ -125,26 +175,37 @@ VM* kvm_init(uint8_t code[], size_t len) {
   char *mem = mmap(0,
     MEM_SIZE,
     PROT_READ | PROT_WRITE | PROT_EXEC,
-    MAP_SHARED | MAP_ANONYMOUS | MAP_NORESERVE,
+    MAP_SHARED | MAP_ANONYMOUS,
     -1, 0);
   if(mem == NULL) pexit("mmap(MEM_SIZE)");
+  int entry = 0x0010000c;//elf_entry_addr(hdr);
 //  int entry = 0x00100000;//elf_entry_addr(hdr);
-  int entry = 0x00000000;//elf_entry_addr(hdr);
 
-  //  printf("offset %u, roundup %u\n", offset, round_up_to_page(s.objsz));
-  memcpy(mem + 0, s[0].mem, s[0].objsz);
-//  memcpy(mem + 0x00100000, s[0].mem, s[0].objsz);
+  printf("roundup %u\n", round_up_to_page(s[0].objsz));
+//  memcpy(mem + 0, s[0].mem, s[0].objsz);
+  memcpy(mem + 0x00100000, s[0].mem, s[0].objsz);
 //  printf("offsetasd %u, roundup %u\n", offset, round_up_to_page(s.objsz));
-  memset(mem + 0 + s[0].objsz, 0, s[0].sz - s[0].objsz);
-//  memset(mem + 0x00100000 + s[0].objsz, 0, s[0].sz - s[0].objsz);
+//  memset(mem + 0 + s[0].objsz, 0, s[0].sz - s[0].objsz);
+  memset(mem + 0x00100000 + s[0].objsz, 0, s[0].sz - s[0].objsz);
 
-  memcpy(mem + 0x00002000, s[1].mem, s[1].objsz);
-//  memcpy(mem + 0x00102000, s[1].mem, s[1].objsz);
-  memset(mem + 0x00002000 + s[1].objsz, 0, s[1].sz - s[1].objsz);
-//  memset(mem + 0x00102000 + s[1].objsz, 0, s[1].sz - s[1].objsz);
+printf("TESTSSSS\n");
 
-  u8_t * add = mem + 0x000000;
-  u8_t * add2 = s[0].mem + 0x0;
+//  memcpy(mem + 0x00002000, s[1].mem, s[1].objsz);
+  memcpy(mem + 0x0011d000, s[1].mem, s[1].objsz);
+
+printf("test...\n" ); 
+printf("vstart1 %p, sz %p, mem %p, entryaddr %p, mem %u\n", s[0].vstart, s[0].sz, s[0].mem, elf_entry_addr(hdr), s[0].mem);
+printf("objsz1 %p sz %p\n", s[0].objsz, s[0].sz);
+printf("vstart2 %p, sz %p, mem %p, entryaddr %p, mem %u\n", s[1].vstart, s[1].sz, s[1].mem, elf_entry_addr(hdr), s[1].mem);
+printf("objsz2 %p sz %p\n", s[1].objsz, s[1].sz);
+  
+  //  memset(mem + 0x00002000 + s[1].objsz, 0, s[1].sz - s[1].objsz);
+  memset(mem + 0x0011d000 + s[1].objsz, 0, s[1].sz - s[1].objsz);
+
+printf("TESTSSSS2\n");
+
+u8_t * add = mem + 0x10000c;
+  u8_t * add2 = s[0].mem + 0x0c;
   printf("\t%x\t%x\t%x\n", *add, *add2, mem);
   printf("\t%x\t%x\t%x\n", *(add+1), *(add2+1), mem);
 //  typedef void (*fn_t)(void);
@@ -188,6 +249,7 @@ VM* kvm_init(uint8_t code[], size_t len) {
 
   setup_regs(vm, entry);
   setup_sregs(vm);
+  setup_protected_mode(vm);
 
   return vm;
 }
@@ -210,6 +272,19 @@ void execute(VM* vm) {
       return;
     case KVM_EXIT_IO:
       if(!check_iopl(vm)) error("KVM_EXIT_SHUTDOWN\n");
+
+
+
+      if(vm->run->io.port == 0xE9){
+        char *p = (char *)vm->run;
+        fwrite(p + vm->run->io.data_offset,
+                vm->run->io.size, 1, stdout);
+        fflush(stdout);
+        continue;
+      }
+
+
+
       if(vm->run->io.port & HP_NR_MARK) {
         if(hp_handler(vm->run->io.port, vm) < 0) error("Hypercall failed\n");
       }
@@ -228,8 +303,24 @@ void execute(VM* vm) {
     }
   }
 }
+/*
+//sigaction stuff?
+void signal_handler (int sig, siginfo_t *info, void *ucontext) {
+	printf("ahh!\n");
+}
 
+void catch_signal() {
+	struct sigaction sa;
+	memset(&sa, 0, sizeof(sa));
+	//struct itermerval timer;
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = &signal_handler;
+	sigaction(SIGALRM, &sa, NULL);
+
+}
+*/
 int main(int argc, char *argv[]) {
+  //catch_signal();
   uint8_t *code = 0;
   size_t len = 0 ;
   read_file(argv[1], &code, &len);
@@ -239,5 +330,6 @@ int main(int argc, char *argv[]) {
       (void*) MAX_KERNEL_SIZE);
 
   VM* vm = kvm_init(code, len);
+  printf("test 1\n");
   execute(vm);
 }

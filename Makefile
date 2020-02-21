@@ -88,15 +88,15 @@ all: $(KERNEL)
 
 $(KERNEL): linker.ld $(DEPS) $(OBJS) loader.o
 	$(info |     [LD]   Linking $@)
-	@$(LD) -T linker.ld loader.o $(OBJS) -o $@
+	$(LD) -T linker.ld loader.o $(OBJS) -o $@
 
 loader.o: loader.S entry.S
 	$(info |     [AS]   Assembling $@)
-	@$(CC) -c -I$(INCPATH) entry.S
-	@$(CC) -c -I$(INCPATH) loader.S
+	$(CC) -c -I$(INCPATH) entry.S
+	$(CC) -c -I$(INCPATH) loader.S
 
 %.d: %.c
-	@$(CC) -M -MT $(patsubst %.d, %.o, $@) $(CFLAGS) $< -o $@
+	$(CC) -M -MT $(patsubst %.d, %.o, $@) $(CFLAGS) $< -o $@
 #$(LDFLAGS)
 #pgtbl.o: ../../kernel/pgtbl.c
 #	$(info |     [CC]   Compiling $@)
@@ -125,12 +125,12 @@ loader.o: loader.S entry.S
 #
 %.o: %.c
 	$(info |     [CC]   Compiling $@)
-	@$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	@rm -f *.d *.o $(KERNEL) $(TARGET)
+	rm -f *.d *.o $(KERNEL) $(TARGET)
 
 cp: $(KERNEL)
 	$(info |     [CP]   Copying native booter to $(TRANS_DIR))
-	@cp -f $(KERNEL) .gdbinit *.sh $(TRANS_DIR)
-	@cp runscripts/*.sh $(TRANS_DIR)
+	cp -f $(KERNEL) .gdbinit *.sh $(TRANS_DIR)
+	cp runscripts/*.sh $(TRANS_DIR)
