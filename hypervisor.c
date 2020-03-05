@@ -13,6 +13,7 @@
 #include "definition.h"
 #include "hypercall.h"
 #include "elf_loader.h"
+//#include "hypervisor.h"
 
 //#define PS_LIMIT (0x1000000)
 #define PS_LIMIT (0x10000000)
@@ -20,6 +21,12 @@
 #define KERNEL_STACK_SIZE (0x4000)
 #define MAX_KERNEL_SIZE (PS_LIMIT - 0x5000 - KERNEL_STACK_SIZE)
 #define MEM_SIZE (PS_LIMIT * 0x2)
+
+struct stringargs {
+	u32_t offset;
+	u32_t length;
+	char character;
+};
 
 static inline int
 elf_load_info_single(struct elf_hdr *hdr, vaddr_t *ro_addr, size_t *ro_sz, char **ro_src)
@@ -127,22 +134,7 @@ void signal_handler (int sig, siginfo_t *info, void *ucontext) {
 
 */
 VM* kvm_init(uint8_t code[], size_t len) { 
-/*
-	struct sigaction sa;
-	memset(&sa, 0, sizeof(sa));
-	struct itimerval timer;
-	sa.sa_flags = SA_SIGINFO;
-	sa.sa_sigaction = &signal_handler;
-	sigaction(SIGALRM, &sa, NULL);
 
-	timer.it_value.tv_sec = 1;
-	timer.it_value.tv_usec = 0;
-	timer.it_interval.tv_sec = 1;
-	timer.it_interval.tv_usec = 0;
-	setitimer(ITIMER_REAL, &timer, NULL);
-
-	while(1);
-*/
   struct elf_contig_mem s[3] = {};
   struct elf_hdr *hdr = (struct elf_hdr *)code;
 
@@ -272,18 +264,44 @@ void execute(VM* vm) {
       return;
     case KVM_EXIT_IO:
       if(!check_iopl(vm)) error("KVM_EXIT_SHUTDOWN\n");
-
-
-
+      
       if(vm->run->io.port == 0xE9){
-        char *p = (char *)vm->run;
-        fwrite(p + vm->run->io.data_offset,
-                vm->run->io.size, 1, stdout);
-        fflush(stdout);
+	
+	struct stringargs *print = (struct stringargs*)(vm->mem);
+	u32_t* a = (u32_t*)(vm->mem);
+	printf("Address of a: %p\n", a);
+	print->offset = *a;
+	u32_t *pointer_to_length = (u32_t*)(vm->mem + print->offset);
+	print->length = *pointer_to_length;
+	printf("print->length address: %p\n", pointer_to_length);
+	printf("print->length contents: %u\n", print->length);
+
+	char *pointer_to_char = (char*)(vm->mem + 2*print->offset);
+	print->character = *pointer_to_char;
+	printf("pointer_to_char (char*): %p\n", pointer_to_char);
+
+	printf("print->string contents = *pointer_to_char = %c\n", print->character);
+
+//  	a->string = vm->mem + a->offset;
+//        printf("%s\n", a->string);
+
+//	PRINT ONE INT	      
+///	u32_t* h;
+//     	h = (u32_t*)vm->mem; //?	
+//     	printf("%c\n", *h);
+
+	//BEFORE      
+//	char *p = (char *)vm->run;
+//	fwrite(p + vm->run->io.data_offset,
+//        vm->run->io.size, 1, stdout);
+//	fflush(stdout);
+	
+//	struct stringargs *a = (struct stringargs*)(vm->mem);
+//	char* s;
+//      s = (int)&vm->mem + (int)&a->s;
+//	printf(" vm->run %d \n", &vm->run);
         continue;
       }
-
-
 
       if(vm->run->io.port & HP_NR_MARK) {
         if(hp_handler(vm->run->io.port, vm) < 0) error("Hypercall failed\n");
@@ -307,7 +325,7 @@ void execute(VM* vm) {
 //sigaction stuff?
 void signal_handler (int sig, siginfo_t *info, void *ucontext) {
 	printf("ahh!\n");
-}
+} 
 
 void catch_signal() {
 	struct sigaction sa;
