@@ -23,9 +23,10 @@
 #define MEM_SIZE (PS_LIMIT * 0x2)
 
 struct stringargs {
+//	char* string;
 	u32_t offset;
 	u32_t length;
-	char character;
+
 };
 
 static inline int
@@ -266,40 +267,27 @@ void execute(VM* vm) {
       if(!check_iopl(vm)) error("KVM_EXIT_SHUTDOWN\n");
       
       if(vm->run->io.port == 0xE9){
-	
+		
 	struct stringargs *print = (struct stringargs*)(vm->mem);
-	u32_t* a = (u32_t*)(vm->mem);
-	printf("Address of a: %p\n", a);
-	print->offset = *a;
-	u32_t *pointer_to_length = (u32_t*)(vm->mem + print->offset);
-	print->length = *pointer_to_length;
-	printf("print->length address: %p\n", pointer_to_length);
-	printf("print->length contents: %u\n", print->length);
-
-	char *pointer_to_char = (char*)(vm->mem + 2*print->offset);
-	print->character = *pointer_to_char;
-	printf("pointer_to_char (char*): %p\n", pointer_to_char);
-
-	printf("print->string contents = *pointer_to_char = %c\n", print->character);
-
-//  	a->string = vm->mem + a->offset;
-//        printf("%s\n", a->string);
-
-//	PRINT ONE INT	      
-///	u32_t* h;
-//     	h = (u32_t*)vm->mem; //?	
-//     	printf("%c\n", *h);
-
-	//BEFORE      
-//	char *p = (char *)vm->run;
-//	fwrite(p + vm->run->io.data_offset,
-//        vm->run->io.size, 1, stdout);
-//	fflush(stdout);
 	
-//	struct stringargs *a = (struct stringargs*)(vm->mem);
-//	char* s;
-//      s = (int)&vm->mem + (int)&a->s;
-//	printf(" vm->run %d \n", &vm->run);
+	printf("Address of print: %x\n", print);
+	u32_t paddress = (u32_t)(print);
+	char* s2 = (char*)(paddress + print->offset);
+	printf("string from using print->offset: %s\n", s2);
+
+	/*USING print->string	
+
+	struct stringargs *print = (struct stringargs*)(vm->mem);
+	
+	printf("Address of print: %p\n", print);
+	u32_t paddress = (u32_t)(print);
+	char* s = (char*)(paddress + print->string);
+	printf("string: %s\n", s);
+	//print length
+	printf("length: %u\n", print->length);
+	
+*/	
+
         continue;
       }
 
