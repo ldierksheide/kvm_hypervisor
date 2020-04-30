@@ -241,6 +241,7 @@ int check_iopl(VM *vm) {
 }
 
 void execute(VM* vm) {
+    hypercall_handlers_init();
     while(1) {
         ioctl(vm->vcpufd, KVM_RUN, NULL);
         dump_regs(vm->vcpufd);
@@ -253,30 +254,9 @@ void execute(VM* vm) {
             if(!check_iopl(vm)) error("KVM_EXIT_SHUTDOWN\n");
             if(vm->run->io.port == 0xE9){
                 struct hyp_shared *args = (struct hyp_shared*)(vm->mem);
-		printf("opcode=%d\n", args->opcode);
-	      	//for some reason not even this is working?
                 if(args->opcode >= 0 && args->opcode < HYPCALL_COUNT) {
-                    if(args->opcode == 0) {
-                      handle_print(args);
-                    }
-                    else if(args->opcode == 1) {
-                      handle_sizephysmem(args);
-                    }
-                    //ugh. ideally its this:
-                    //handle_hypercall[args->opcode](args);
+                    hypercall_handlers[args->opcode](args);
                 }
-          /*
-                if(hypercall->opcode == HYP_GET_PHYS_MEM) {
-                  printf("multiboot\n");
-                }
-                else {
-                  struct stringargs *print = (struct stringargs*)(vm->mem);	
-                  printf("Address of print: %x\n", print);
-                  u32_t paddress = (u32_t)(print);
-                  char* s2 = (char*)(paddress + print->offset);
-                  printf("string from using print->offset: %s\n", s2);
-                }
-          */
                 continue;
             }
 
