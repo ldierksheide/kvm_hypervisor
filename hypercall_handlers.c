@@ -7,28 +7,45 @@
 #include <stdio.h>
 #include <string.h>
 
-//static void (*handle_hypercall[HYPCALL_COUNT])(struct hyp_shared* args);
+#define MAX_HANDLERS 5
 
-//void handle_hypercall[HYP_physmem](struct hyp_shared* args) {
-void handle_sizephysmem(struct hyp_shared* args) {
-	//what do even do with it?
-	u32_t size_phys_mem = args->args[0];
-	printf("size phys mem = %d\n", size_phys_mem);
-	args->ret[0] = 0;
+void handle_sizephysmem(struct hyp_shared* args); 
+void handle_print(struct hyp_shared* args);
+
+static void (*hypercall_handlers[MAX_HANDLERS])(struct hyp_shared*);
+static unsigned num_handlers = 0;
+
+int
+hypercall_register_handler(void (*handler)(struct hyp_shared*), int opcode)
+{
+	if (handler == NULL || num_handlers > (sizeof(hypercall_handlers) / sizeof(hypercall_handlers[0]))) return -1;
+	hypercall_handlers[opcode] = handler;
+	num_handlers++;
+	return 0;
 }
 
-//void handle_hypercall[HYP_printk](struct hyp_shared* args) {
+int hypercall_handlers_init() {
+	//register our functions hypercall handlers
+	void (*func_ptr)(struct hyp_shared*) = &handle_sizephysmem;
+	hypercall_register_handler(func_ptr, HYP_physmem);
+
+	func_ptr = &handle_print;
+	hypercall_register_handler(func_ptr, HYP_printk);
+
+}
+
+void handle_sizephysmem(struct hyp_shared* args) {
+	args->ret[0] = 0;
+	args->ret[1] = 0x3d09000;
+}
+
 void handle_print(struct hyp_shared* args) {
-	//ok! let's print
 	u32_t str_len = args->args[1];
 	u32_t offset = args->args[0];
-	//validate string() - check length constraints and for "/0"(?)
+
+	/*TODO: validate string */
 	char* str = (char*)((u32_t)(args) + offset);
-	//struct stringargs *print = (struct stringargs*)(vm->mem);	
-	//printf("Address of print: %x\n", print);
-	//u32_t paddress = (u32_t)(print);
-	//char* s2 = (char*)(paddress + print->offset);
-	printf("string: %s\n", str);
-	//alternatively: write(stdout, str, str_len);
+	
+	printf("%s", str);
 	args->ret[0] = 0;
 }

@@ -12,6 +12,7 @@ LDFLAGS := -nostdlib -fno-builtin -nostartfiles -nostdinc -nodefaultlibs
 KERNEL := kernel.img
 
 WARNINGS += -Wall
+WARNINGS += -Wextra
 WARNINGS += -Wcast-align
 WARNINGS += -Wformat=2
 WARNINGS += -Winit-self
@@ -27,7 +28,7 @@ WARNINGS += -Wundef
 WARNINGS += -Wvolatile-register-var
 WARNINGS += -Wwrite-strings
 
-#CFLAGS += $(WARNINGS)
+CFLAGS += $(WARNINGS)
 
 #OBJS += kernel.o
 #OBJS += gdt.o

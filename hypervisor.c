@@ -245,14 +245,38 @@ void execute(VM* vm) {
     while(1) {
         ioctl(vm->vcpufd, KVM_RUN, NULL);
         dump_regs(vm->vcpufd);
+
+        /*printf("vm->run->request_interrupt_window = %d\n", vm->run->request_interrupt_window);
+        printf("vm->run->ready for interrupt injection = %d\n", vm->run->ready_for_interrupt_injection);
+
+        int ret;
+        struct kvm_sregs get_regs;
+        if((ret = ioctl(vm->vcpufd, KVM_GET_SREGS, &get_regs)) == 0) {
+          printf("interrupt bitmap = %lld\n", *get_regs.interrupt_bitmap);
+        }
+        else {
+          printf("error getting registers\n");
+        }
+   */   
         switch (vm->run->exit_reason) {
         case KVM_EXIT_HLT:
           fprintf(stderr, "KVM_EXIT_HLT\n");
           return;
         case KVM_EXIT_IO:
-            //this is where I'm gonna need to check the opcode and interpret the shared struct args accordingly
+            //check the opcode and interpret the shared struct args accordingly
             if(!check_iopl(vm)) error("KVM_EXIT_SHUTDOWN\n");
             if(vm->run->io.port == 0xE9){
+                
+/*                struct kvm_interrupt interrupt = { .irq = 37};
+
+                if((ret = ioctl(vm->vcpufd, KVM_INTERRUPT, &interrupt)) == 0) {
+                  printf("success?\n");
+                }
+                else {
+                  printf("ret = %d\n", ret);
+                  perror("interrupt err");
+                }
+*/
                 struct hyp_shared *args = (struct hyp_shared*)(vm->mem);
                 if(args->opcode >= 0 && args->opcode < HYPCALL_COUNT) {
                     hypercall_handlers[args->opcode](args);
@@ -265,7 +289,7 @@ void execute(VM* vm) {
             }
             else error("Unhandled I/O port: 0x%x\n", vm->run->io.port);
             break;
-
+        
         case KVM_EXIT_FAIL_ENTRY:
             error("KVM_EXIT_FAIL_ENTRY: hardware_entry_failure_reason = 0x%llx\n",
               vm->run->fail_entry.hardware_entry_failure_reason);

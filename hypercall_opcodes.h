@@ -9,4 +9,4 @@ struct hyp_shared {
 };
 //general: ret[0] = 0 on success, error code on failure
 //for printk: args[0] = offset to string, args[1] = length of string
-//for physmem: args[0] = size of phys mem!
+//for physmem: ret[1] = size phys mem!
