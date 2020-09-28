@@ -32,3 +32,4 @@ GTAGS
 .clang_complete
 Vagrantfile
 provision.sh
+.vscode

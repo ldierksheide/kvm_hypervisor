@@ -242,41 +242,29 @@ int check_iopl(VM *vm) {
 
 void execute(VM* vm) {
     hypercall_handlers_init();
-    while(1) {
-        ioctl(vm->vcpufd, KVM_RUN, NULL);
+    while(1) {  
+		ioctl(vm->vcpufd, KVM_RUN, NULL);
         dump_regs(vm->vcpufd);
 
-        /*printf("vm->run->request_interrupt_window = %d\n", vm->run->request_interrupt_window);
-        printf("vm->run->ready for interrupt injection = %d\n", vm->run->ready_for_interrupt_injection);
+		if(vm->run->ready_for_interrupt_injection) {
+			//Inject interrupt #13: General Protection Fault
+			struct kvm_interrupt interrupt = { .irq = 13};
 
-        int ret;
-        struct kvm_sregs get_regs;
-        if((ret = ioctl(vm->vcpufd, KVM_GET_SREGS, &get_regs)) == 0) {
-          printf("interrupt bitmap = %lld\n", *get_regs.interrupt_bitmap);
-        }
-        else {
-          printf("error getting registers\n");
-        }
-   */   
+			int interrupt_return;
+			if(ioctl(vm->vcpufd, KVM_INTERRUPT, &interrupt) != 0) {
+				perror("Error injecting interrupt\n");
+			}
+		}
+      
         switch (vm->run->exit_reason) {
         case KVM_EXIT_HLT:
-          fprintf(stderr, "KVM_EXIT_HLT\n");
-          return;
+        	fprintf(stderr, "KVM_EXIT_HLT\n");
+        	return;
         case KVM_EXIT_IO:
             //check the opcode and interpret the shared struct args accordingly
             if(!check_iopl(vm)) error("KVM_EXIT_SHUTDOWN\n");
             if(vm->run->io.port == 0xE9){
-                
-/*                struct kvm_interrupt interrupt = { .irq = 37};
 
-                if((ret = ioctl(vm->vcpufd, KVM_INTERRUPT, &interrupt)) == 0) {
-                  printf("success?\n");
-                }
-                else {
-                  printf("ret = %d\n", ret);
-                  perror("interrupt err");
-                }
-*/
                 struct hyp_shared *args = (struct hyp_shared*)(vm->mem);
                 if(args->opcode >= 0 && args->opcode < HYPCALL_COUNT) {
                     hypercall_handlers[args->opcode](args);
@@ -301,6 +289,7 @@ void execute(VM* vm) {
         default:
             error("Unhandled reason: %d\n", vm->run->exit_reason);
         }
+
     }
 }
 int main(int argc, char *argv[]) {
